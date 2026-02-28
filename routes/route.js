@@ -1,6 +1,7 @@
 import express from 'express';
 import { getAllUsers } from '../controllers/userController.js';
 import { chatWithAI } from '../services/openaiService.js';
+import { handleWebhook, validateHMAC } from '../controllers/webhookController.js';
 
 const router = express.Router();
 
@@ -9,9 +10,13 @@ router.get('/', getAllUsers);
 // Chat with AI
 router.post('/chat', async (req, res) => {
     try {
-        const { messages, maxTokens, temperature } = req.body;
-        if (!messages || !Array.isArray(messages)) {
-            return res.status(400).json({ error: 'Messages array is required' });
+        let { messages, maxTokens, temperature } = req.body;
+        // Accept string or array, always convert to string for now
+        if (!messages) {
+            return res.status(400).json({ error: 'Messages is required' });
+        }
+        if (Array.isArray(messages)) {
+            messages = messages.map(m => (typeof m === 'string' ? m : JSON.stringify(m))).join('\n');
         }
         const response = await chatWithAI(messages, maxTokens, temperature);
         res.json({ response });
@@ -32,6 +37,15 @@ router.get('/chat', async (req, res) => {
         console.error('Chat error:', error);
         res.status(500).json({ error: 'Failed to chat with AI' });
     }
+});
+
+// Webhook route
+router.post('/webhook', validateHMAC, handleWebhook);
+
+// Test webhook without HMAC for debugging
+router.post('/webhook-test', (req,res) => {
+    console.log("Headers:", req.headers);
+    handleWebhook
 });
 
 // Auth Router
